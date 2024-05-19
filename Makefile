@@ -15,3 +15,6 @@ sqlx-init:
 
 sqlx-links:
 	sqlx migrate add -r links
+
+sqlx-run:
+	sqlx migrate run 

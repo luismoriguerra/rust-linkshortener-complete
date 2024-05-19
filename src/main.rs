@@ -8,7 +8,10 @@ use sqlx::postgres::PgPoolOptions;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{fmt::layer, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
+use crate::routes::redirect;
+
 mod routes;
+mod utils;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -33,6 +36,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let (prometheus_layer, metric_handler) = PrometheusMetricLayer::pair();
 
     let app = Router::new()
+        .route("/:id", get(redirect))
         .route("/metrics", get(|| async move { metric_handler.render() }))
         .route("/health", get(health))
         .layer(TraceLayer::new_for_http())
