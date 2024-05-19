@@ -2,7 +2,9 @@ use std::error::Error;
 
 use axum::{routing::get, Router};
 use axum_prometheus::PrometheusMetricLayer;
+use dotenvy::dotenv;
 use routes::health;
+use sqlx::postgres::PgPoolOptions;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{fmt::layer, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
@@ -10,6 +12,16 @@ mod routes;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    dotenv().ok();
+
+    let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL is not set");
+
+    let db = PgPoolOptions::new()
+        .max_connections(20)
+        .connect(&db_url)
+        .await
+        .expect("Failed to connect to database");
+
     tracing_subscriber::registry()
         .with(
             EnvFilter::try_from_default_env()
@@ -24,7 +36,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .route("/metrics", get(|| async move { metric_handler.render() }))
         .route("/health", get(health))
         .layer(TraceLayer::new_for_http())
-        .layer(prometheus_layer);
+        .layer(prometheus_layer)
+        .with_state(db);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
         .await
