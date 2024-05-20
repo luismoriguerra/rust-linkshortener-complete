@@ -1,7 +1,8 @@
 use std::error::Error;
 
 use axum::{
-    routing::{get, post},
+    middleware,
+    routing::{get, patch, post},
     Router,
 };
 use axum_prometheus::PrometheusMetricLayer;
@@ -11,8 +12,9 @@ use sqlx::postgres::PgPoolOptions;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{fmt::layer, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
-use crate::routes::{create_link, redirect};
-
+use crate::auth::auth;
+use crate::routes::{create_link, get_link_statistics, redirect, update_link};
+mod auth;
 mod routes;
 mod utils;
 
@@ -36,12 +38,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with(layer())
         .init();
 
-    let (prometheus_layer, metric_handler) = PrometheusMetricLayer::pair();
+    let (prometheus_layer, metric_handle) = PrometheusMetricLayer::pair();
 
     let app = Router::new()
         .route("/create", post(create_link))
-        .route("/:id", get(redirect))
-        .route("/metrics", get(|| async move { metric_handler.render() }))
+        .route("/:id/statistics", get(get_link_statistics))
+        .route_layer(middleware::from_fn_with_state(db.clone(), auth))
+        .route(
+            "/:id",
+            patch(update_link)
+                .route_layer(middleware::from_fn_with_state(db.clone(), auth))
+                .get(redirect),
+        )
+        .route("/metrics", get(|| async move { metric_handle.render() }))
         .route("/health", get(health))
         .layer(TraceLayer::new_for_http())
         .layer(prometheus_layer)
